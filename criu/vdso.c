@@ -354,6 +354,7 @@ static int vdso_parse_maps(pid_t pid, struct vdso_maps *s)
 
 	exit_code = 0;
 err:
+	close_pid_proc();
 	bclose(&f);
 	return exit_code;
 }
