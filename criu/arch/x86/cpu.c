@@ -203,6 +203,59 @@ static uint32_t x86_ins_capability_mask[NCAPINTS] = {
 	__ins_bit(CPUID_7_0_EDX, X86_FEATURE_AVX512_4VNNIW) |
 	__ins_bit(CPUID_7_0_EDX, X86_FEATURE_AVX512_4FMAPS),
 };
+
+//openjdk11 used features in file: hotspot/cpu/x86/vm_version_x86.hpp
+static uint32_t x86_jvm_ins_capability_mask[NCAPINTS] = {
+        [CPUID_1_EDX] =
+        __ins_bit(CPUID_1_EDX, X86_FEATURE_TSC) |
+        __ins_bit(CPUID_1_EDX, X86_FEATURE_CX8) |
+        __ins_bit(CPUID_1_EDX, X86_FEATURE_CMOV) |
+        __ins_bit(CPUID_1_EDX, X86_FEATURE_MMX) |
+        __ins_bit(CPUID_1_EDX, X86_FEATURE_FXSR) |
+        __ins_bit(CPUID_1_EDX, X86_FEATURE_XMM) |
+        __ins_bit(CPUID_1_EDX, X86_FEATURE_XMM2) |
+        __ins_bit(CPUID_1_EDX, X86_FEATURE_HT),
+
+        [CPUID_1_ECX] =
+        __ins_bit(CPUID_1_ECX, X86_FEATURE_XMM3) |
+        __ins_bit(CPUID_1_ECX, X86_FEATURE_PCLMULQDQ) |
+        __ins_bit(CPUID_1_ECX, X86_FEATURE_SSSE3) |
+        __ins_bit(CPUID_1_ECX, X86_FEATURE_FMA) |
+        __ins_bit(CPUID_1_ECX, X86_FEATURE_XMM4_1) |
+        __ins_bit(CPUID_1_ECX, X86_FEATURE_XMM4_2) |
+        __ins_bit(CPUID_1_ECX, X86_FEATURE_POPCNT) |
+        __ins_bit(CPUID_1_ECX, X86_FEATURE_AES) |
+        __ins_bit(CPUID_1_ECX, X86_FEATURE_OSXSAVE) |
+        __ins_bit(CPUID_1_ECX, X86_FEATURE_AVX),
+
+        [CPUID_8000_0001_ECX] =
+        __ins_bit(CPUID_8000_0001_ECX, X86_FEATURE_ABM) |
+        __ins_bit(CPUID_8000_0001_ECX, X86_FEATURE_SSE4A) |
+        __ins_bit(CPUID_8000_0001_ECX, X86_FEATURE_3DNOWPREFETCH),
+
+        [CPUID_7_0_EBX] =
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_BMI1) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_AVX2) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_BMI2) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_ERMS) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_RTM) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_AVX512F) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_AVX512DQ) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_ADX) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_AVX512PF) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_AVX512ER) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_AVX512CD) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_SHA_NI) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_AVX512BW) |
+        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_AVX512VL),
+
+        [CPUID_7_0_ECX] =
+        __ins_bit(CPUID_7_0_ECX, X86_FEATURE_AVX512VBMI) |
+        __ins_bit(CPUID_7_0_ECX, X86_FEATURE_AVX512_VBMI2) |
+        __ins_bit(CPUID_7_0_ECX, X86_FEATURE_VAES) |
+        __ins_bit(CPUID_7_0_ECX, X86_FEATURE_VPCLMULQDQ) |
+        __ins_bit(CPUID_7_0_ECX, X86_FEATURE_AVX512_VPOPCNTDQ),
+};
 // clang-format on
 
 #undef __ins_bit
@@ -226,6 +279,26 @@ static int cpu_validate_ins_features(compel_cpuinfo_t *cpu_info)
 	}
 
 	return 0;
+}
+
+static int cpu_validate_jvm_features(compel_cpuinfo_t *cpu_info) {
+  size_t i;
+
+  for (i = 0; i < ARRAY_SIZE(cpu_info->x86_capability); i++) {
+    uint32_t s = cpu_info->x86_capability[i] & x86_jvm_ins_capability_mask[i];
+    uint32_t d = rt_cpu_info.x86_capability[i] & x86_jvm_ins_capability_mask[i];
+
+    /*
+     * Destination might be more feature rich
+     * but not the reverse.
+     */
+    if (s & ~d) {
+      pr_err("CPU instruction capabilities which JVM used do not match run time\n");
+      return -1;
+    }
+  }
+
+  return 0;
 }
 
 static int cpu_validate_features(compel_cpuinfo_t *cpu_info)
@@ -298,6 +371,24 @@ static int cpu_validate_features(compel_cpuinfo_t *cpu_info)
 			return -1;
 		}
 	}
+
+	/*
+	 * Check all features that JVM(now only support ajdk11) required.
+	 */
+  if (opts.cpu_cap & CPU_CAP_JVM) {
+    if (cpu_validate_jvm_features(cpu_info)) {
+      return -1;
+    }
+
+    /*
+    * c->x86_power is 8000_0007 edx. Bit 8 is TSC runs at constant rate
+    * with P/T states and does not stop in deep C-states
+    */
+    if ((rt_cpu_info.x86_power & (1 << 8)) != (cpu_info->x86_power & (1 << 8))) {
+      pr_err("TSCINV do not match run time\n");
+      return -1;
+    }
+  }
 
 	return 0;
 }

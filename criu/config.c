@@ -491,6 +491,12 @@ static int parse_cpu_cap(struct cr_options *opts, const char *optarg)
 		} else if (!strncmp(optarg, "ins", 3)) {
 			____cpu_set_cap(opts, CPU_CAP_INS, inverse);
 			optarg += 3;
+		} else if (!strncmp(optarg, "jvm", 3)) {
+			// jvm cpu cap exclusive with fpu and ins(which is set by default)
+			____cpu_set_cap(opts, CPU_CAP_JVM, inverse);
+			____cpu_set_cap(opts, CPU_CAP_FPU, true);
+			____cpu_set_cap(opts, CPU_CAP_INS, true);
+			optarg += 3;
 		} else
 			goto Esyntax;
 	}
