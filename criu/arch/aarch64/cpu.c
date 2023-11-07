@@ -31,10 +31,10 @@ int cpu_validate_image_cpuinfo_single(void)
 
 int cpuinfo_dump(void)
 {
-	return -ENOTSUP;
+	return 0;
 }
 
 int cpuinfo_check(void)
 {
-	return -ENOTSUP;
+	return 0;
 }
