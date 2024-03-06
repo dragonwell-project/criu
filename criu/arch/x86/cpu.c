@@ -238,7 +238,6 @@ static uint32_t x86_jvm_ins_capability_mask[NCAPINTS] = {
         __ins_bit(CPUID_7_0_EBX, X86_FEATURE_AVX2) |
         __ins_bit(CPUID_7_0_EBX, X86_FEATURE_BMI2) |
         __ins_bit(CPUID_7_0_EBX, X86_FEATURE_ERMS) |
-        __ins_bit(CPUID_7_0_EBX, X86_FEATURE_RTM) |
         __ins_bit(CPUID_7_0_EBX, X86_FEATURE_AVX512F) |
         __ins_bit(CPUID_7_0_EBX, X86_FEATURE_AVX512DQ) |
         __ins_bit(CPUID_7_0_EBX, X86_FEATURE_ADX) |
