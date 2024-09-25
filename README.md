@@ -11,6 +11,9 @@
 
 ## CRIU -- A project to implement checkpoint/restore functionality for Linux
 
+The project fork from [criu](https://github.com/checkpoint-restore/criu). We fix some bugs
+when run in container, add a feature that checking JVM-related CPU features when restore. 
+
 CRIU (stands for Checkpoint and Restore in Userspace) is a utility to checkpoint/restore Linux tasks.
 
 Using this tool, you can freeze a running application (or part of it) and checkpoint
