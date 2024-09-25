@@ -30,7 +30,11 @@ else
 REQ-RPM-PKG-TEST-NAMES	+= $(PYTHON)-pyyaml
 endif
 
-export LIBS		+= -lprotobuf-c -ldl -lnl-3 -lsoccr -Lsoccr/ -lnet
+ifeq ($(BUILD_MODE),static)
+	export LIBS     += -Wl,-Bstatic -lprotobuf-c -lnl-3 -lnet -Wl,-Bdynamic -lpthread -ldl -lsoccr -Lsoccr/ $(DEP_LIBS)
+else 
+	export LIBS		+= -lprotobuf-c -ldl -lnl-3 -lsoccr -Lsoccr/ -lnet
+endif
 
 check-packages-failed:
 	$(warning Can not find some of the required libraries)
