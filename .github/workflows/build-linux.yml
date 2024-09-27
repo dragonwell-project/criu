@@ -1,0 +1,154 @@
+#
+# Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
+# DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+#
+# This code is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 only, as
+# published by the Free Software Foundation.  Oracle designates this
+# particular file as subject to the "Classpath" exception as provided
+# by Oracle in the LICENSE file that accompanied this code.
+#
+# This code is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# version 2 for more details (a copy is included in the LICENSE file that
+# accompanied this code).
+#
+# You should have received a copy of the GNU General Public License version
+# 2 along with this work; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
+#
+
+name: 'Build (linux)'
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{fromJson(inputs.runs-on)}}
+
+    steps:
+      - name: Checkout criu source code
+        uses: actions/checkout@v4
+
+      - name: Checkout libnet source code 
+        uses: actions/checkout@v4
+        with:
+          repository: libnet/libnet
+          ref: v1.2
+          depth: 1
+          path: libnet
+
+      - name: Checkout libnl source code
+        uses: actions/checkout@v4
+        with:
+          repository: thom311/libnl
+          ref: libnl3_2_25
+          depth: 1
+          path: libnl
+
+      - name: Checkout protobuf-c source code
+        uses: actions/checkout@v4
+        with:
+          repository: protobuf-c/protobuf-c
+          ref: v1.0.0
+          depth: 1
+          path: protobuf-c
+
+      - name: Get Uid
+        id: get_uid
+        run: |
+          uid=$(id -u)
+          echo "::set-output name=uid::${uid}"
+
+      - name: Build protobuf-c
+        id: install_protobuf-c
+        run: |
+            docker run -t -u ${{ steps.get_uid.outputs.uid }}:${{ steps.get_uid.outputs.uid }} \
+            --network host \
+            -v $GITHUB_WORKSPACE/protobuf-c:$GITHUB_WORKSPACE/protobuf-c \
+            -v /etc/hosts:/etc/hosts:ro \
+            -v /etc/group:/etc/group:rw \
+            -v /etc/passwd:/etc/passwd:ro \
+            -v /etc/shadow:/etc/shadow:ro \
+            alibabadragonwelljdk/criu-centos7-build:latest \
+            /bin/bash -c "source /opt/rh/devtoolset-7/enable && \
+                          cd $GITHUB_WORKSPACE/protobuf-c && \
+                          mkdir -p dist && \
+                          ./autogen.sh && \
+                          ./configure --prefix=$GITHUB_WORKSPACE/protobuf-c/dist && \
+                          make && make install"
+            echo "::set-output name=lib::$GITHUB_WORKSPACE/protobuf-c/dist/lib"
+        shell: bash
+
+      - name: Build libnet
+        id: install_libnet
+        run: |
+            sed -i 's#AM_INIT_AUTOMAKE(\[1.14#AM_INIT_AUTOMAKE(\[1.13.4#g' $GITHUB_WORKSPACE/libnet/configure.ac
+            docker run -t -u ${{ steps.get_uid.outputs.uid }}:${{ steps.get_uid.outputs.uid }} \
+            --network host \
+            -v $GITHUB_WORKSPACE/libnet:$GITHUB_WORKSPACE/libnet \
+            -v /etc/hosts:/etc/hosts:ro \
+            -v /etc/group:/etc/group:rw \
+            -v /etc/passwd:/etc/passwd:ro \
+            -v /etc/shadow:/etc/shadow:ro \
+            alibabadragonwelljdk/criu-centos7-build:latest \
+            /bin/bash -c "source /opt/rh/devtoolset-7/enable && \
+                          cd $GITHUB_WORKSPACE/libnet && \
+                          mkdir -p dist && \
+                          ./autogen.sh && \
+                          ./configure --prefix=$GITHUB_WORKSPACE/libnet/dist && \
+                          make && make install"
+            echo "::set-output name=lib::$GITHUB_WORKSPACE/libnet/dist/lib"
+        shell: bash
+
+      - name: Build libnl
+        id: install_libnl
+        run: |
+            docker run -t -u ${{ steps.get_uid.outputs.uid }}:${{ steps.get_uid.outputs.uid }} \
+            --network host \
+            -v $GITHUB_WORKSPACE/libnl:$GITHUB_WORKSPACE/libnl \
+            -v /etc/hosts:/etc/hosts:ro \
+            -v /etc/group:/etc/group:rw \
+            -v /etc/passwd:/etc/passwd:ro \
+            -v /etc/shadow:/etc/shadow:ro \
+            alibabadragonwelljdk/criu-centos7-build:latest \
+            /bin/bash -c "source /opt/rh/devtoolset-7/enable && \
+                          cd $GITHUB_WORKSPACE/libnl && \
+                          mkdir -p dist && \
+                          ./autogen.sh && \
+                          ./configure --prefix=$GITHUB_WORKSPACE/libnl/dist && \
+                          make && make install"
+            echo "::set-output name=lib::$GITHUB_WORKSPACE/libnl/dist/lib"
+        shell: bash
+
+      - name: Build criu
+        run: |
+            docker run -t -u ${{ steps.get_uid.outputs.uid }}:${{ steps.get_uid.outputs.uid }} \
+            --network host \
+            -v $GITHUB_WORKSPACE:$GITHUB_WORKSPACE \
+            -v /etc/hosts:/etc/hosts:ro \
+            -v /etc/group:/etc/group:rw \
+            -v /etc/passwd:/etc/passwd:ro \
+            -v /etc/shadow:/etc/shadow:ro \
+            alibabadragonwelljdk/criu-centos7-build:latest \
+            /bin/bash -c "source /opt/rh/devtoolset-7/enable && \
+                          export BUILD_MODE='static' && \
+                          export DEP_LIBS=\"-L${{ steps.install_protobuf-c.outputs.lib }} -L${{ steps.install_libnet.outputs.lib }} -L${{ steps.install_libnl.outputs.lib }}\" && \
+                          cd $GITHUB_WORKSPACE && \
+                          make"
+            # check
+            if [ -n "$(readelf --dynamic $GITHUB_WORKSPACE/criu/criu | grep NEEDED | grep \"libprotobuf-c\|libnl-3\|libnet\")" ];then
+                echo "criu should link staticlly to some libs,but link dynamiclly now!"
+                exit 1
+            fi
+        shell: bash
